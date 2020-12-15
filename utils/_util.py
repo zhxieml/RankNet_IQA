@@ -40,3 +40,17 @@ def prepare_device(n_gpu_use, gpu_id):
     device = torch.device('cuda:{}'.format(gpu_id) if n_gpu_use > 0 else 'cpu')
     list_ids = list(range(n_gpu_use))
     return device, list_ids
+
+def cal_mean_and_std(dataloader):
+    mean, var = 0.0, 0.0
+    num_sample = 0.0
+
+    for imgs, _ in dataloader:
+        num_sample_batch = imgs.size(0)
+        imgs = imgs.view(num_sample_batch, imgs.size(1), -1)
+        mean += imgs.mean(2).sum(0)
+        var += imgs.var(2).sum(0)
+
+        num_sample += num_sample_batch
+
+    return mean / num_sample, (var / num_sample) ** 0.5
