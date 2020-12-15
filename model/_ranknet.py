@@ -30,22 +30,20 @@ class RankNet(nn.Module):
         return prob
 
 class ResRankNet(nn.Module):
-    def __init__(self, num_features):
+    def __init__(self):
         super(ResRankNet, self).__init__()
 
         # Use Resnet50 as the backbone to extract features.
         resnet50 = models.resnet50(pretrained=True)
         self.backbone = nn.Sequential(*list(resnet50.children())[:-1])
-        self.middle = nn.Linear(resnet50.fc.in_features, num_features)
 
         # User RankNet to learn to rank.
-        self.ranknet = RankNet(num_features)
+        self.ranknet = RankNet(resnet50.fc.in_features)
 
     def forward(self, input1, input2):
         feat1 = self.backbone(input1)
         feat2 = self.backbone(input2)
         feat1, feat2 = feat1.view(feat1.size(0), -1), feat2.view(feat2.size(0), -1)
-        feat1, feat2 = self.middle(feat1), self.middle(feat2)
         prob = self.ranknet(feat1, feat2)
 
         return prob
