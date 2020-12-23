@@ -4,31 +4,37 @@
 
     "arch": {
         "type": "ResRankNet",
-        "args": {
-            "num_features": 100
-        }
+        "args": {}
     },
-    "dataset": {
-        "type": "RankIQADataset",
-        "args": {
-            "dirname": "/mnt/zhxie_hdd/dataset/IQA",
-            "type": "color"
-        }
-    },
-    "dataloader": {
+    "train_dataloader": {
         "type": "RankIQADataloader",
         "args": {
             "dirname": "/mnt/zhxie_hdd/dataset/IQA",
             "type": "color",
             "batch_size": 16,
-            "shuffle": false,
-            "num_workers": 8
+            "shuffle": true,
+            "num_workers": 32,
+            "pin_memory": true
+        }
+    },
+    "valid_dataloader": {
+        "type": "ValidDataloader",
+        "args": {
+            "dirname": "/mnt/zhxie_hdd/dataset/IQA",
+            "type": "color",
+            "num_workers": 32,
+            "pin_memory": true
         }
     },
     "optimizer": {
         "type": "Adam",
-        "args": {}
+        "args": {
+            "lr": 3e-4
+        }
     },
+    "metrics": [
+        "srcc"
+    ],
     "criterion": {
         "type": "BCELoss",
         "args": {}
