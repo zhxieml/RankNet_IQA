@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 import torchvision.models as models
 
@@ -29,6 +30,12 @@ class RankNet(nn.Module):
 
         return prob
 
+    def predict(self, input):
+        with torch.no_grad():
+            out = self.model(input)
+
+        return out
+
 class ResRankNet(nn.Module):
     def __init__(self):
         super(ResRankNet, self).__init__()
@@ -36,6 +43,10 @@ class ResRankNet(nn.Module):
         # Use Resnet50 as the backbone to extract features.
         resnet50 = models.resnet50(pretrained=True)
         self.backbone = nn.Sequential(*list(resnet50.children())[:-1])
+
+        # Freeze the backbone.
+        for param in self.backbone.parameters():
+            param.requires_grad = False
 
         # User RankNet to learn to rank.
         self.ranknet = RankNet(resnet50.fc.in_features)
@@ -47,3 +58,11 @@ class ResRankNet(nn.Module):
         prob = self.ranknet(feat1, feat2)
 
         return prob
+
+    def predict(self, input):
+        with torch.no_grad():
+            feat = self.backbone(input)
+            feat = feat.view(feat.size(0), -1)
+            out = self.ranknet.predict(feat)
+
+            return out
