@@ -4,12 +4,14 @@ import collections
 import numpy as np
 import torch
 import torch.nn as nn
+from tqdm import tqdm
 
 import dataset as module_data
+import metric as module_metric
 import model as module_arch
 from parse_config import ConfigParser
 
-torch.backends.cudnn.enabled = False
+# torch.backends.cudnn.enabled = False
 
 NUM_EPOCHS = 10
 
@@ -20,12 +22,19 @@ torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 np.random.seed(SEED)
 
+def display_valid_info(valid_metrics):
+    print("############ Validation ############")
+    for metric_name, metric_list in valid_metrics.items():
+        print("{}: {:.4f}".format(metric_name, np.mean(metric_list)))
+    print("############ Validation ############")
+
 def main(config):
     # Setup the logger.
     logger = config.get_logger("train")
 
     # Setup the dataset.
-    dataloader = config.init_obj("dataloader", module_data)
+    train_dataloader = config.init_obj("train_dataloader", module_data)
+    valid_dataloader = config.init_obj("valid_dataloader", module_data)
 
     # Build the model architecture, then print it to console.
     model = config.init_obj("arch", module_arch)
@@ -35,20 +44,22 @@ def main(config):
     device = torch.device("cuda:{}".format(config["gpu_id"]))
     model = model.to(device)
 
-    # Define our optimizer and criterion.
+    # Define our optimizer, criterion and metrics.
     optimizer = config.init_obj("optimizer", torch.optim, model.parameters())
     criterion = config.init_obj("criterion", nn)
+    metrics = dict((metric, getattr(module_metric, metric)) for metric in config["metrics"])
 
     # Create some logger.
     losses = []
 
-    # Train.
+    # Start train & validate.
     for epoch in range(NUM_EPOCHS):
-        for batch_idx, (win_img_batch, lose_img_batch) in enumerate(dataloader):
+        # Train part.
+        model.train()
+        for batch_idx, ((first_imgs_batch, second_imgs_batch), label_batch) in enumerate(train_dataloader):
             # Forward.
-            win_img_batch, lose_img_batch = win_img_batch.to(device), lose_img_batch.to(device)
-            label_batch = torch.Tensor([[1.0]] * win_img_batch.shape[0]).to(device)
-            outputs = model(win_img_batch, lose_img_batch)
+            first_imgs_batch, second_imgs_batch, label_batch = first_imgs_batch.to(device), second_imgs_batch.to(device), label_batch.to(device)
+            outputs = model(first_imgs_batch, second_imgs_batch)
             loss = criterion(outputs, label_batch)
 
             # Backword.
@@ -58,8 +69,23 @@ def main(config):
 
             # Record.
             losses.append(loss)
-            if epoch % 10 == 0:
-                print("Epoch [{}/{}], Loss: {:.4f}".format(epoch + 1, NUM_EPOCHS, loss.item()))
+            if batch_idx % 10 == 0:
+                print("Epoch [{}/{}]\tBatch: {}\tLoss: {:.4f}".format(epoch + 1, NUM_EPOCHS, batch_idx, loss.item()))
+
+        # Validation part.
+        model.eval()
+        valid_metrics = collections.defaultdict(list)
+
+        with torch.no_grad():
+            for batch_idx, (data_batch, label_batch) in enumerate(valid_dataloader):
+                data_batch, label_batch = data_batch.to(device), label_batch.to(device)
+                outputs = model.predict(data_batch)
+
+                for metric_name, metric_fn in metrics.items():
+                    metric = metric_fn(outputs, label_batch)
+                    valid_metrics[metric_name].append(metric.item())
+
+        display_valid_info(valid_metrics)
 
 if __name__ == "__main__":
     args = argparse.ArgumentParser(description="Train.")
