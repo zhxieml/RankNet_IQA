@@ -1,22 +1,18 @@
-import torch
+import numpy as np
 
-def srcc(output, target):
-    num = output.shape[0]
+def srcc(scores, rank_gt):
+    scores, rank_gt = scores.cpu().numpy()[:, 0], rank_gt.cpu().numpy()[:, 0]
+    assert len(scores) == len(rank_gt)
+    num_img = len(scores)
 
-    with torch.no_grad():
-        output = torch.argsort(output, dim=0, descending=True).float() + 1.0
-        diff = output - target
-        res = 1 - 6 * torch.dot(diff[:, 0], diff[:, 0]) / (num ** 3 - num)
+    sorted_idxs = np.argsort(scores)[::-1]
+    rank = np.empty(num_img)
+    rank[sorted_idxs] = np.arange(num_img) + 1
+
+    diff = rank - rank_gt
+    res = 1 - 6 * np.dot(diff, diff) / (num_img ** 3 - num_img)
 
     return res
-
-def accuracy(output, target):
-    with torch.no_grad():
-        pred = (output > 0.5).float()
-        correct = 0
-        correct += torch.sum(pred == target).item()
-
-    return correct / len(target)
 
 if __name__ == "__main__":
     pass
