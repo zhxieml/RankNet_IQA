@@ -1,6 +1,10 @@
 from PIL import Image
 from torchvision import transforms
 
+# Means & stds for (224, 224) training data.
+MEAN = (0.4224, 0.4010, 0.3602)
+STD = (0.2311, 0.2251, 0.2371)
+
 def cal_mean_and_std(dataloader):
     mean, var = 0.0, 0.0
     num_sample = 0.0
@@ -21,8 +25,8 @@ def process_img(img_filename):
         transforms.Resize((224, 224)),
         transforms.ToTensor(),
         transforms.Normalize(
-            mean=(0.4312, 0.4158, 0.3733),
-            std=(0.2344, 0.2295, 0.2448)
+            mean=MEAN,
+            std=STD
         )
     ])
 
