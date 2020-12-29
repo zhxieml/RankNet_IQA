@@ -10,10 +10,8 @@ import dataset as module_data
 import metric as module_metric
 import model as module_arch
 from parse_config import ConfigParser
-
-# torch.backends.cudnn.enabled = False
-
-NUM_EPOCHS = 10
+from trainer import Trainer
+from utils.common import prepare_device
 
 # Fix random seeds for reproducibility.
 SEED = 123
@@ -22,17 +20,12 @@ torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 np.random.seed(SEED)
 
-def display_valid_info(valid_metrics):
-    print("############ Validation ############")
-    for metric_name, metric_list in valid_metrics.items():
-        print("{}: {:.4f}".format(metric_name, np.mean(metric_list)))
-    print("############ Validation ############")
-
 def main(config):
     # Setup the logger.
     logger = config.get_logger("train")
 
     # Setup the dataset.
+    print("It may take some time to prepare data (even longer if pin_memory is set).")
     train_dataloader = config.init_obj("train_dataloader", module_data)
     valid_dataloader = config.init_obj("valid_dataloader", module_data)
 
@@ -41,51 +34,25 @@ def main(config):
     logger.info(model)
 
     # Prepare for GPU training.
-    device = torch.device("cuda:{}".format(config["gpu_id"]))
+    device, device_ids = prepare_device(config["n_gpu"])
     model = model.to(device)
+    if len(device_ids) > 1:
+        model = torch.nn.DataParallel(model, device_ids=device_ids)
 
     # Define our optimizer, criterion and metrics.
     optimizer = config.init_obj("optimizer", torch.optim, model.parameters())
+    lr_scheduler = config.init_obj("lr_scheduler", torch.optim.lr_scheduler, optimizer)
     criterion = config.init_obj("criterion", nn)
-    metrics = dict((metric, getattr(module_metric, metric)) for metric in config["metrics"])
+    metric_fns = dict((metric, getattr(module_metric, metric)) for metric in config["metrics"])
 
-    # Create some logger.
-    losses = []
+    trainer = Trainer(model, criterion, metric_fns, optimizer,
+                      config=config, device=device,
+                      train_dataloader=train_dataloader,
+                      valid_dataloader=valid_dataloader,
+                      lr_scheduler=lr_scheduler,
+                      logger=logger)
 
-    # Start train & validate.
-    for epoch in range(NUM_EPOCHS):
-        # Train part.
-        model.train()
-        for batch_idx, ((first_imgs_batch, second_imgs_batch), label_batch) in enumerate(train_dataloader):
-            # Forward.
-            first_imgs_batch, second_imgs_batch, label_batch = first_imgs_batch.to(device), second_imgs_batch.to(device), label_batch.to(device)
-            outputs = model(first_imgs_batch, second_imgs_batch)
-            loss = criterion(outputs, label_batch)
-
-            # Backword.
-            model.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-            # Record.
-            losses.append(loss)
-            if batch_idx % 10 == 0:
-                print("Epoch [{}/{}]\tBatch: {}\tLoss: {:.4f}".format(epoch + 1, NUM_EPOCHS, batch_idx, loss.item()))
-
-        # Validation part.
-        model.eval()
-        valid_metrics = collections.defaultdict(list)
-
-        with torch.no_grad():
-            for batch_idx, (data_batch, label_batch) in enumerate(valid_dataloader):
-                data_batch, label_batch = data_batch.to(device), label_batch.to(device)
-                outputs = model.predict(data_batch)
-
-                for metric_name, metric_fn in metrics.items():
-                    metric = metric_fn(outputs, label_batch)
-                    valid_metrics[metric_name].append(metric.item())
-
-        display_valid_info(valid_metrics)
+    trainer.train()
 
 if __name__ == "__main__":
     args = argparse.ArgumentParser(description="Train.")
@@ -97,7 +64,7 @@ if __name__ == "__main__":
     CustomArgs = collections.namedtuple("CustomArgs", "flags type target")
     options = [
         CustomArgs(["--lr", "--learning_rate"], type=float, target="optimizer;args;lr"),
-        CustomArgs(["--bs", "--batch_size"], type=int, target="data_loader;args;batch_size")
+        CustomArgs(["--bs", "--batch_size"], type=int, target="train_dataloader;args;batch_size")
     ]
     config = ConfigParser.from_args(args, options)
 
