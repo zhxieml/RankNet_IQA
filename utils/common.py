@@ -24,7 +24,7 @@ def inf_loop(data_loader):
     for loader in repeat(data_loader):
         yield from loader
 
-def prepare_device(n_gpu_use, gpu_id):
+def prepare_device(n_gpu_use):
     """
     setup GPU device if available. get gpu device indices which are used for DataParallel
     """
@@ -37,6 +37,6 @@ def prepare_device(n_gpu_use, gpu_id):
         print(f"Warning: The number of GPU\'s configured to use is {n_gpu_use}, but only {n_gpu} are "
               "available on this machine.")
         n_gpu_use = n_gpu
-    device = torch.device("cuda:{}".format(gpu_id) if n_gpu_use > 0 else "cpu")
+    device = torch.device("cuda:0" if n_gpu_use > 0 else "cpu")
     list_ids = list(range(n_gpu_use))
     return device, list_ids

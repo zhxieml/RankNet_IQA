@@ -2,12 +2,9 @@ import csv
 import itertools
 import multiprocessing
 import os
-import random
 
-from PIL import Image
 import torch
 from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms
 
 from utils.data import process_img
 
