@@ -9,55 +9,49 @@ import dataset as module_data
 import metric as module_metric
 import model as module_arch
 from parse_config import ConfigParser
+from utils.common import prepare_device
 
 def main(config):
-    # Setup the logger.
-    logger = config.get_logger("train")
-
     # Setup the dataset.
-    dataloader = config.init_obj("dataloader", module_data)
+    print("It may take some time to prepare data (even longer if pin_memory is set).")
+    valid_dataloader = config.init_obj("valid_dataloader", module_data)
 
     # Build the model architecture, then print it to console.
     model = config.init_obj("arch", module_arch)
-    logger.info(model)
+    print(model)
 
-    # Define the criterion and metrics.
-    criterion = config.init_obj("criterion", nn)
-    metrics = [getattr(module_metric, metric) for metric in config["metrics"]]
+    # Define the metrics.
+    metric_fns = dict((metric, getattr(module_metric, metric)) for metric in config["metrics"])
 
     # Load the checkpoint.
-    logger.info("Loading checkpoint: {} ...".format(config.resume))
+    print("Loading checkpoint: {}...".format(config.resume))
     checkpoint = torch.load(config.resume)
     state_dict = checkpoint["state_dict"]
     model.load_state_dict(state_dict)
 
-    # Prepare for GPU training.
-    device = torch.device("cuda:{}".format(config["gpu_id"]))
+    # Prepare GPU(s).
+    device, device_ids = prepare_device(config["n_gpu"])
     model = model.to(device)
+    if len(device_ids) > 1:
+        model = torch.nn.DataParallel(model, device_ids=device_ids)
 
-    # Initialize records.
-    total_loss = 0.0
-    total_metrics = torch.zeros(len(metrics))
+    # Set the eval mode.
+    model.eval()
+    valid_metrics = collections.defaultdict(list)
 
     with torch.no_grad():
-        for batch_idx, (win_img_batch, lose_img_batch, label_batch) in enumerate(dataloader):
-            win_img_batch, lose_img_batch, label_batch = win_img_batch.to(device), lose_img_batch, label_batch.to(device)
-            output = model(win_img_batch, lose_img_batch)
+        for _, (data_batch, label_batch) in enumerate(valid_dataloader):
+            data_batch, label_batch = data_batch.to(device), label_batch.to(device)
+            outputs = model.predict(data_batch)
 
-            # Compute loss, metrics on test set
-            loss = criterion(output, label_batch)
-            batch_size = win_img_batch.shape[0]
-            total_loss += loss.item() * batch_size
+            for metric_name, metric_fn in metric_fns.items():
+                metric = metric_fn(outputs, label_batch)
+                valid_metrics[metric_name].append(metric.item())
 
-            for batch_idx, metric in enumerate(metrics):
-                total_metrics[batch_idx] += metric(output, label_batch) * batch_size
+    for metric_name, metric_list in valid_metrics.items():
+        valid_metrics[metric_name] = np.mean(metric_list)
 
-    n_samples = len(dataloader.sampler)
-    log = {'loss': total_loss / n_samples}
-    log.update({
-        metric.__name__: total_metrics[i].item() / n_samples for i, metric in enumerate(metrics)
-    })
-    logger.info(log)
+    print(valid_metrics)
 
 if __name__ == "__main__":
     args = argparse.ArgumentParser(description="Train.")

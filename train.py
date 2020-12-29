@@ -4,7 +4,6 @@ import collections
 import numpy as np
 import torch
 import torch.nn as nn
-from tqdm import tqdm
 
 import dataset as module_data
 import metric as module_metric
@@ -33,7 +32,7 @@ def main(config):
     model = config.init_obj("arch", module_arch)
     logger.info(model)
 
-    # Prepare for GPU training.
+    # Prepare GPU(s).
     device, device_ids = prepare_device(config["n_gpu"])
     model = model.to(device)
     if len(device_ids) > 1:
@@ -49,8 +48,7 @@ def main(config):
                       config=config, device=device,
                       train_dataloader=train_dataloader,
                       valid_dataloader=valid_dataloader,
-                      lr_scheduler=lr_scheduler,
-                      logger=logger)
+                      lr_scheduler=lr_scheduler)
 
     trainer.train()
 
