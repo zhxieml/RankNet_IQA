@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 class Trainer(object):
     def __init__(self, model, criterion, metric_fns, optimizer, config, device, train_dataloader,
-                 valid_dataloader=None, lr_scheduler=None, logger=None):
+                 valid_dataloader=None, lr_scheduler=None):
         self._model = model
         self._criterion = criterion
         self._metric_fns = metric_fns
@@ -17,7 +17,6 @@ class Trainer(object):
         self._train_dataloader = train_dataloader
         self._valid_dataloader = valid_dataloader
         self._lr_scheduler = lr_scheduler
-        self._logger = logger
 
         # Parse the config.
         trainer_config = self._config["trainer"]
@@ -26,6 +25,7 @@ class Trainer(object):
         self._num_epoch = trainer_config["num_epoch"]
         self._save_period = trainer_config["save_period"]
         self._early_stop = trainer_config["early_stop"]
+        self._logger = config.get_logger("trainer", trainer_config["verbosity"])
         self._start_epoch_idx = 0
         self._best_valid_metrics = None
 
@@ -47,23 +47,23 @@ class Trainer(object):
     def _resume_checkpoint(self, checkpoint_filename):
         state = torch.load(checkpoint_filename)
 
-        if state["config"]["arch"]["type"] != self.config["arch"]["type"]:
+        if state["config"]["arch"]["type"] != self._config["arch"]["type"]:
             raise Exception("Failed at resuming checkpoint: conflicting model types.")
-        if state["config"]["optimizer"]["type"] != self.config["optimizer"]["type"]:
+        if state["config"]["optimizer"]["type"] != self._config["optimizer"]["type"]:
             raise Exception("Failed at resuming checkpoint: conflicting optimizer types.")
 
         self._model.load_state_dict(state["state_dict"])
         self._optimizer.load_state_dict(state["optimizer"])
         self._best_valid_metrics = state["best_valid_metrics"]
+        self._start_epoch_idx = state["epoch"] + 1
 
         return state["epoch"] + 1
 
     def _train_epoch(self, epoch_idx):
         # Set the train mode.
         self._model.train()
-        progress_bar = tqdm(enumerate(self._train_dataloader))
 
-        for _, ((first_imgs_batch, second_imgs_batch), label_batch) in progress_bar:
+        for batch_idx, ((first_imgs_batch, second_imgs_batch), label_batch) in enumerate(self._train_dataloader):
             # Forward.
             first_imgs_batch, second_imgs_batch, label_batch = first_imgs_batch.to(self._device), second_imgs_batch.to(self._device), label_batch.to(self._device)
             outputs = self._model(first_imgs_batch, second_imgs_batch)
@@ -75,7 +75,8 @@ class Trainer(object):
             self._optimizer.step()
 
             # Record.
-            progress_bar.set_description("[Epoch {}/{}] Loss: {}".format(epoch_idx + 1, self._num_epoch, loss.item()))
+            if not batch_idx % 10:
+                self._logger.info("[Epoch {}/{} Batch {}] Loss: {:.4f}".format(epoch_idx + 1, self._num_epoch, batch_idx, loss.item()))
 
         if self._lr_scheduler is not None:
             self._lr_scheduler.step()
@@ -94,12 +95,14 @@ class Trainer(object):
                     metric = metric_fn(outputs, label_batch)
                     valid_metrics[metric_name].append(metric.item())
 
+        for metric_name, metric_list in valid_metrics.items():
+            valid_metrics[metric_name] = np.mean(metric_list)
+
         # Record.
         if self._logger is not None:
-            self._logger.debug("############ Validation [{}/{}] ############".format(epoch_idx + 1, self._num_epoch))
-            for metric_name, metric_list in valid_metrics.items():
-                self._logger.debug("{}: {:.4f}".format(metric_name, np.mean(metric_list)))
-            self._logger.debug("\n")
+            self._logger.info("############ Validation [{}/{}] ############".format(epoch_idx + 1, self._num_epoch))
+            for metric_name, mean_metric in valid_metrics.items():
+                self._logger.info("{}: {:.4f}".format(metric_name, mean_metric))
 
         return valid_metrics
 
@@ -120,7 +123,7 @@ class Trainer(object):
                 not_improved_count += 1
 
             if not_improved_count > self._early_stop:
-                print("Early stopped.")
+                self._logger.info("Early stopped.")
                 break
 
             if epoch_idx % self._save_period == 0:
