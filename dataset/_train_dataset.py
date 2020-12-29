@@ -11,7 +11,7 @@ from torchvision import transforms
 
 from utils.data import process_img
 
-class RankIQADataset(Dataset):
+class TrainDataset(Dataset):
     def __init__(self, dirname, type, pin):
         assert type.lower() in ["color", "exposure", "noise", "texture"]
 
@@ -89,10 +89,10 @@ class RankIQADataset(Dataset):
 
         return all_pairs, all_img_filenames
 
-class RankIQADataloader(DataLoader):
+class TrainDataloader(DataLoader):
     def __init__(self, dirname, type, batch_size, shuffle, num_workers, pin_memory):
-        super().__init__(RankIQADataset(dirname, type, pin=pin_memory), batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, pin_memory=not pin_memory)
+        super().__init__(TrainDataset(dirname, type, pin=pin_memory), batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, pin_memory=not pin_memory)
 
 if __name__ == "__main__":
-    dataset = RankIQADataset("/mnt/zhxie_hdd/dataset/IQA", type="color", pin=True)
+    dataset = TrainDataset("/mnt/zhxie_hdd/dataset/IQA", type="color", pin=True)
     pass

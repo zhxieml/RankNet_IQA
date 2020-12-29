@@ -14,9 +14,7 @@ class IQADataset(Dataset):
         self._label_dirname = os.path.join(dirname, "score_and_sort", "Training", "score")
         self._type = type.lower()
         self._transform = transforms.Compose([
-            transforms.Resize((3648, 2736)),
-            # transforms.Resize((400, 300)),
-            # transforms.Resize((400, 300)),
+            transforms.Resize((224, 224)),
             transforms.ToTensor()
         ])
 

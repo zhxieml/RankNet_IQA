@@ -1,5 +1,5 @@
 from dataset import IQADataloader
-from utils import cal_mean_and_std
+from utils.data import cal_mean_and_std
 
 INPUT_FOLDER = "/mnt/zhxie_hdd/dataset/IQA"
 
