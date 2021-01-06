@@ -14,14 +14,11 @@ from utils.common import prepare_device
 def main(config):
     # Setup the dataset.
     print("It may take some time to prepare data (even longer if pin_memory is set).")
-    valid_dataloader = config.init_obj("valid_dataloader", module_data)
+    test_dataloader = config.init_obj("test_dataloader", module_data)
 
     # Build the model architecture, then print it to console.
     model = config.init_obj("arch", module_arch)
     print(model)
-
-    # Define the metrics.
-    metric_fns = dict((metric, getattr(module_metric, metric)) for metric in config["metrics"])
 
     # Load the checkpoint.
     print("Loading checkpoint: {}...".format(config.resume))
@@ -37,21 +34,15 @@ def main(config):
 
     # Set the eval mode.
     model.eval()
-    valid_metrics = collections.defaultdict(list)
 
     with torch.no_grad():
-        for _, (data_batch, label_batch) in enumerate(valid_dataloader):
-            data_batch, label_batch = data_batch.to(device), label_batch.to(device)
+        for _, (data_batch, filename_batch) in enumerate(test_dataloader):
+            data_batch = data_batch.to(device)
             outputs = model.predict(data_batch)
+            scores = outputs.cpu().numpy()[:, 0]
+            rank = module_metric.get_rank(scores)
 
-            for metric_name, metric_fn in metric_fns.items():
-                metric = metric_fn(outputs, label_batch)
-                valid_metrics[metric_name].append(metric.item())
-
-    for metric_name, metric_list in valid_metrics.items():
-        valid_metrics[metric_name] = np.mean(metric_list)
-
-    print(valid_metrics)
+            print(dict(zip(filename_batch, rank)))
 
 if __name__ == "__main__":
     args = argparse.ArgumentParser(description="Train.")
