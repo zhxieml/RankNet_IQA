@@ -90,9 +90,10 @@ class Trainer(object):
             for _, (data_batch, label_batch) in enumerate(self._valid_dataloader):
                 data_batch, label_batch = data_batch.to(self._device), label_batch.to(self._device)
                 outputs = self._model.predict(data_batch)
+                scores, rank_gt = outputs.cpu().numpy()[:, 0], label_batch.cpu().numpy()[:, 0]
 
                 for metric_name, metric_fn in self._metric_fns.items():
-                    metric = metric_fn(outputs, label_batch)
+                    metric = metric_fn(scores, rank_gt)
                     valid_metrics[metric_name].append(metric.item())
 
         for metric_name, metric_list in valid_metrics.items():
