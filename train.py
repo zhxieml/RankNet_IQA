@@ -25,8 +25,8 @@ def main(config):
 
     # Setup the dataset.
     print("It may take some time to prepare data (even longer if pin_memory is set).")
-    train_dataloader = config.init_obj("train_dataloader", module_data)
-    valid_dataloader = config.init_obj("valid_dataloader", module_data)
+    train_dataloader = config.init_obj("dataloader", module_data)
+    valid_dataloader = train_dataloader.get_valid_dataloader()
 
     # Build the model architecture, then print it to console.
     model = config.init_obj("arch", module_arch)

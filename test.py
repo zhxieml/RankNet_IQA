@@ -14,7 +14,15 @@ from utils.common import prepare_device
 def main(config):
     # Setup the dataset.
     print("It may take some time to prepare data (even longer if pin_memory is set).")
-    test_dataloader = config.init_obj("test_dataloader", module_data)
+    test_dataloader = getattr(module_data, config["dataloader"]['type'])(
+        config["dataloader"]["args"]["dirname"],
+        batch_size=512,
+        shuffle=False,
+        num_workers=32,
+        pin_memory=True,
+        validation_split=0.0,
+        split="test"
+    )
 
     # Build the model architecture, then print it to console.
     model = config.init_obj("arch", module_arch)

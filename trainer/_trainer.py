@@ -6,8 +6,8 @@ import torch
 from tqdm import tqdm
 
 class Trainer(object):
-    def __init__(self, model, criterion, metric_fns, optimizer, config, device, train_dataloader,
-                 valid_dataloader=None, lr_scheduler=None):
+    def __init__(self, model, criterion, metric_fns, optimizer, config, device,
+                 train_dataloader, valid_dataloader=None, lr_scheduler=None):
         self._model = model
         self._criterion = criterion
         self._metric_fns = metric_fns
@@ -63,10 +63,10 @@ class Trainer(object):
         # Set the train mode.
         self._model.train()
 
-        for batch_idx, ((first_imgs_batch, second_imgs_batch), label_batch) in enumerate(self._train_dataloader):
+        for batch_idx, ((first_data_batch, second_data_batch), label_batch) in enumerate(self._train_dataloader):
             # Forward.
-            first_imgs_batch, second_imgs_batch, label_batch = first_imgs_batch.to(self._device), second_imgs_batch.to(self._device), label_batch.to(self._device)
-            outputs = self._model(first_imgs_batch, second_imgs_batch)
+            first_data_batch, second_data_batch, label_batch = first_data_batch.to(self._device), second_data_batch.to(self._device), label_batch.to(self._device)
+            outputs = self._model(first_data_batch, second_data_batch)
             loss = self._criterion(outputs, label_batch)
 
             # Backword.
@@ -87,13 +87,14 @@ class Trainer(object):
         valid_metrics = collections.defaultdict(list)
 
         with torch.no_grad():
-            for _, (data_batch, label_batch) in enumerate(self._valid_dataloader):
-                data_batch, label_batch = data_batch.to(self._device), label_batch.to(self._device)
-                outputs = self._model.predict(data_batch)
-                scores, rank_gt = outputs.cpu().numpy()[:, 0], label_batch.cpu().numpy()[:, 0]
+            for _, ((first_data_batch, second_data_batch), label_batch) in enumerate(self._valid_dataloader):
+                # Forward.
+                first_data_batch, second_data_batch, label_batch = first_data_batch.to(self._device), second_data_batch.to(self._device), label_batch.to(self._device)
+                outputs = self._model(first_data_batch, second_data_batch)
+                outputs, label_batch = outputs.cpu().numpy()[:, 0], label_batch.cpu().numpy()[:, 0]
 
                 for metric_name, metric_fn in self._metric_fns.items():
-                    metric = metric_fn(scores, rank_gt)
+                    metric = metric_fn(outputs, label_batch)
                     valid_metrics[metric_name].append(metric.item())
 
         for metric_name, metric_list in valid_metrics.items():
@@ -111,7 +112,12 @@ class Trainer(object):
         not_improved_count = 0
 
         for epoch_idx in range(self._start_epoch_idx, self._num_epoch):
+            # Train.
             self._train_epoch(epoch_idx)
+
+            # Validation.
+            if not self._valid_dataloader:
+                continue
             valid_metrics = self._valid_epoch(epoch_idx)
 
             # Check whether to stop early (assume the higher the better).

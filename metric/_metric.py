@@ -10,14 +10,23 @@ def get_rank(scores):
     return rank
 
 def srcc(scores, rank_gt):
-    num_img = len(scores)
-    assert num_img == len(rank_gt)
+    num_samples = len(scores)
+    assert num_samples == len(rank_gt)
 
     rank = get_rank(scores)
     diff = rank - rank_gt
-    res = 1 - 6 * np.dot(diff, diff) / (num_img ** 3 - num_img)
+    res = 1 - 6 * np.dot(diff, diff) / (num_samples ** 3 - num_samples)
 
     return res
+
+def accuracy(output, target):
+    num_samples = len(output)
+    assert num_samples == len(target)
+
+    pred = (output > 0.5).astype(float)
+    correct = np.sum(pred == target)
+
+    return correct / num_samples
 
 if __name__ == "__main__":
     pass
