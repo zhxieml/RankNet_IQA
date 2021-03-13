@@ -9,7 +9,7 @@ from logger import setup_logging
 from utils.common import read_json, write_json
 
 class ConfigParser:
-    def __init__(self, config, resume=None, modification=None, run_id=None):
+    def __init__(self, config, resume=None, modification=None, run_id=None, enable_log=True):
         """
         class to parse configuration json file. Handles hyperparameters for training, initializations of modules, checkpoint saving
         and logging module.
@@ -18,37 +18,38 @@ class ConfigParser:
         :param modification: Dict keychain:value, specifying position values to be replaced from config dict.
         :param run_id: Unique Identifier for training processes. Used to save checkpoints and training log. Timestamp is being used as default
         """
-        # load config file and apply modification.
+        # Load config file and apply modification.
         self._config = _update_config(config, modification)
-        self.resume = resume
+        self._enable_log = enable_log
+        self._resume = resume
 
         # Let save_dir where trained model and log will be saved.
-        save_dirname = Path(self.config["trainer"]["save_dirname"])
-
-        exper_name = self.config["name"]
+        save_dirname = Path(self._config["trainer"]["save_dirname"])
+        experiment_name = self._config["name"]
         if run_id is None: # use timestamp as default run-id.
             run_id = datetime.now().strftime(r"%m%d_%H%M%S")
-        self._save_dirname = save_dirname / "models" / exper_name / run_id
-        self._log_dirname = save_dirname / "log" / exper_name / run_id
+        self._save_dirname = save_dirname / "models" / experiment_name / run_id
+        self._log_dirname = save_dirname / "log" / experiment_name / run_id
 
-        # Make directory for saving checkpoints and log.
-        exist_ok = run_id == ""
-        self.save_dirname.mkdir(parents=True, exist_ok=exist_ok)
-        self.log_dirname.mkdir(parents=True, exist_ok=exist_ok)
+        # If logging enabled, make directory for saving checkpoints and log.
+        if self._enable_log:
+            exist_ok = run_id == ""
+            self._save_dirname.mkdir(parents=True, exist_ok=exist_ok)
+            self._log_dirname.mkdir(parents=True, exist_ok=exist_ok)
 
-        # Save updated config file to the checkpoint dir.
-        write_json(self.config, self.save_dirname / "config.json")
+            # Save updated config file to the checkpoint dir.
+            write_json(self._config, self._save_dirname / "config.json")
 
-        # Configure logging module
-        setup_logging(self.log_dirname)
-        self.log_levels = {
-            0: logging.WARNING,
-            1: logging.INFO,
-            2: logging.DEBUG
-        }
+            # Configure logging module
+            setup_logging(self._log_dirname)
+            self._log_levels = {
+                0: logging.WARNING,
+                1: logging.INFO,
+                2: logging.DEBUG
+            }
 
     @classmethod
-    def from_args(cls, args, options=""):
+    def from_args(cls, args, options="", enable_log=True):
         """
         Initialize this class from some cli arguments. Used in train, test.
         """
@@ -75,7 +76,7 @@ class ConfigParser:
 
         # Parse custom cli options into dictionary.
         modification = {opt.target : getattr(args, _get_opt_name(opt.flags)) for opt in options}
-        return cls(config, resume, modification)
+        return cls(config, resume, modification, enable_log=enable_log)
 
     def init_obj(self, name, module, *args, **kwargs):
         """
@@ -109,18 +110,26 @@ class ConfigParser:
 
     def __getitem__(self, name):
         """ Access items like ordinary dict."""
-        return self.config[name]
+        return self._config[name]
 
     def get_logger(self, name, verbosity=2):
-        msg_verbosity = "verbosity option {} is invalid. Valid options are {}.".format(verbosity, self.log_levels.keys())
-        assert verbosity in self.log_levels, msg_verbosity
+        msg_verbosity = "verbosity option {} is invalid. Valid options are {}.".format(verbosity, self._log_levels.keys())
+        assert verbosity in self._log_levels, msg_verbosity
         logger = logging.getLogger(name)
-        logger.setLevel(self.log_levels[verbosity])
+        logger.setLevel(self._log_levels[verbosity])
         return logger
 
     @property
     def config(self):
         return self._config
+
+    @property
+    def enable_log(self):
+        return self._enable_log
+
+    @property
+    def resume(self):
+        return self._resume
 
     @property
     def save_dirname(self):
