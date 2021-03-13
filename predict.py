@@ -1,9 +1,10 @@
 import argparse
-import collections
+import itertools
 
 import numpy as np
+import pandas as pd
 import torch
-import torch.nn as nn
+from tqdm import tqdm
 
 import dataset as module_data
 import metric as module_metric
@@ -11,13 +12,16 @@ import model as module_arch
 from parse_config import ConfigParser
 from utils.common import prepare_device
 
+META_FILENAME = "/mnt/zhxie_hdd/dataset/ut-zap50k/ut-zap50k-data/meta-data-bin.csv"
+
 def main(config):
     # Setup the dataset.
     print("It may take some time to prepare data (even longer if pin_memory is set).")
-    kwargs = config["dataloader"]["args"]
-    kwargs["validation_split"] = 0.0
-    kwargs["split"] = "test"
-    test_dataloader = getattr(module_data, config["dataloader"]["type"])(**kwargs)
+    df = pd.read_csv(META_FILENAME)
+    feats = torch.Tensor(df.loc[:, "Category.Shoes": "ToeStyle.Medallion"].to_numpy())
+    num_samples = len(feats)
+
+    res = np.empty(num_samples)
 
     # Build the model architecture, then print it to console.
     model = config.init_obj("arch", module_arch)
@@ -40,17 +44,15 @@ def main(config):
     model.eval()
 
     with torch.no_grad():
-        for _, ((first_data_batch, second_data_batch), label_batch) in enumerate(test_dataloader):
-            # Forward.
-            first_data_batch, second_data_batch, label_batch = first_data_batch.to(device), second_data_batch.to(device), label_batch.to(device)
-            outputs = model(first_data_batch, second_data_batch)
-            outputs, label_batch = outputs.cpu().numpy()[:, 0], label_batch.cpu().numpy()[:, 0]
-            acc = module_metric.accuracy(outputs, label_batch)
+        for sample_idx in tqdm(range(num_samples)):
+            feat = feats[sample_idx].to(device)
+            value = model.predict(feat)
+            res[sample_idx] = value
 
-            print(acc)
+    np.save("/mnt/zhxie_hdd/results/offlineCRS/relative_predict/predict/open", res)
 
 if __name__ == "__main__":
-    args = argparse.ArgumentParser(description="Test.")
+    args = argparse.ArgumentParser(description="Predict.")
     args.add_argument("-c", "--config", default=None, type=str, help="config file path (default: None)")
     args.add_argument("-r", "--resume", default=None, type=str, help="path to latest checkpoint (default: None)")
     args.add_argument("-d", "--device", default=None, type=str, help="indices of GPUs to enable (default: all)")

@@ -1,23 +1,23 @@
 {
-    "name": "Zappos-RankNet",
+    "name": "Zappos-RankNet-test",
     "n_gpu": 1,
 
     "arch": {
         "type": "RankNet",
         "args": {
-            "num_features": 151
+            "num_features": 990
         }
     },
     "dataloader": {
         "type": "ZapposDataloader",
         "args": {
             "dirname": "/mnt/zhxie_hdd/dataset/ut-zap50k",
-            "type": "open",
+            "category": "comfort",
+            "feat_type": "gist+color",
             "batch_size": 128,
             "shuffle": true,
             "num_workers": 32,
-            "pin_memory": true,
-            "validation_split": 0.1
+            "validation_split": 0.0
         }
     },
     "optimizer": {
@@ -41,7 +41,7 @@
         }
     },
     "trainer": {
-        "num_epoch": 500,
+        "num_epoch": 25,
         "save_dirname": "/mnt/zhxie_hdd/results/offlineCRS/relative_predict",
         "save_period": 5,
         "early_stop": 10,

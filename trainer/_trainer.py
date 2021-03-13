@@ -20,15 +20,20 @@ class Trainer(object):
 
         # Parse the config.
         trainer_config = self._config["trainer"]
+        self._enable_log = self._config.enable_log
         self._resume = self._config.resume
-        self._save_dirname = self._config.save_dirname
         self._num_epoch = trainer_config["num_epoch"]
-        self._save_period = trainer_config["save_period"]
         self._early_stop = trainer_config["early_stop"]
-        self._logger = config.get_logger("trainer", trainer_config["verbosity"])
         self._start_epoch_idx = 0
         self._best_valid_metrics = None
 
+        # Setup logging.
+        if self._enable_log:
+            self._save_dirname = self._config.save_dirname
+            self._save_period = trainer_config["save_period"]
+            self._logger = config.get_logger("trainer", trainer_config["verbosity"])
+
+        # Resume checkpoint.
         if self._resume is not None:
             self._resume_checkpoint(self._resume)
 
@@ -75,7 +80,7 @@ class Trainer(object):
             self._optimizer.step()
 
             # Record.
-            if not batch_idx % 10:
+            if self._enable_log and not batch_idx % 10:
                 self._logger.info("[Epoch {}/{} Batch {}] Loss: {:.4f}".format(epoch_idx + 1, self._num_epoch, batch_idx, loss.item()))
 
         if self._lr_scheduler is not None:
@@ -101,7 +106,7 @@ class Trainer(object):
             valid_metrics[metric_name] = np.mean(metric_list)
 
         # Record.
-        if self._logger is not None:
+        if self._enable_log and self._logger is not None:
             self._logger.info("############ Validation [{}/{}] ############".format(epoch_idx + 1, self._num_epoch))
             for metric_name, mean_metric in valid_metrics.items():
                 self._logger.info("{}: {:.4f}".format(metric_name, mean_metric))
@@ -129,8 +134,8 @@ class Trainer(object):
                     not_improved_count += 1
 
                 if not_improved_count > self._early_stop:
-                    self._logger.info("Early stopped.")
+                    if self._enable_log: self._logger.info("Early stopped.")
                     break
 
-            if epoch_idx % self._save_period == 0:
+            if self._enable_log and epoch_idx % self._save_period == 0:
                 self._save_checkpoint(epoch_idx)
