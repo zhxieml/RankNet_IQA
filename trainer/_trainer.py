@@ -116,22 +116,21 @@ class Trainer(object):
             self._train_epoch(epoch_idx)
 
             # Validation.
-            if not self._valid_dataloader:
-                continue
-            valid_metrics = self._valid_epoch(epoch_idx)
+            if self._valid_dataloader:
+                valid_metrics = self._valid_epoch(epoch_idx)
 
-            # Check whether to stop early (assume the higher the better).
-            first_try = self._best_valid_metrics is None
-            improved = first_try or np.all([valid_metrics[metric_name] > self._best_valid_metrics[metric_name] for metric_name in valid_metrics])
-            if improved:
-                not_improved_count = 0
-                self._best_valid_metrics = valid_metrics
-            else:
-                not_improved_count += 1
+                # Check whether to stop early (assume the higher the better).
+                first_try = self._best_valid_metrics is None
+                improved = first_try or np.all([valid_metrics[metric_name] > self._best_valid_metrics[metric_name] for metric_name in valid_metrics])
+                if improved:
+                    not_improved_count = 0
+                    self._best_valid_metrics = valid_metrics
+                else:
+                    not_improved_count += 1
 
-            if not_improved_count > self._early_stop:
-                self._logger.info("Early stopped.")
-                break
+                if not_improved_count > self._early_stop:
+                    self._logger.info("Early stopped.")
+                    break
 
             if epoch_idx % self._save_period == 0:
                 self._save_checkpoint(epoch_idx)
